@@ -303,6 +303,16 @@ https://www.paddlepaddle.org.cn/inference/master/guides/x86_cpu_infer/paddle_x86
 ```
 python python_demo.py --model_file ./resnet50/inference.pdmodel --params_file ./resnet50/inference.pdiparams --batch_size 2
 ```
-### C++ demo
-https://www.paddlepaddle.org.cn/inference/master/guides/quick_start/cpp_demo.html 
+### C++ demo with Inference
+https://www.paddlepaddle.org.cn/inference/master/guides/quick_start/cpp_demo.html \
+推理库安装：https://www.paddlepaddle.org.cn/inference/master/guides/install/download_lib.html#windows 
+解压后的预测库paddle_inference目录(如解压后的目录名称不同，也需重命名为paddle_inference)拷贝至Paddle-Inference-Demo/c++/lib目录下
 
+----
+开启IR graph可视化
+```
+python: config.switch_ir_debug()
+c++: cfg.SwitchIrDebug()
+
+dot -Tpng xxx.dot -o xxx.png
+```
