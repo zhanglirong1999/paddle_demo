@@ -92,39 +92,18 @@ np.testing.assert_allclose(
 
 print('-----------now static ----------------')
 
-dygraph_loss_cpu = train(True)
+static_loss_cpu = train(True)
 fluid.set_flags({'FLAGS_use_mkldnn': True})
 try:
-    dygraph_loss_mkldnn = train(True)
+    static_loss_mkldnn = train(True)
 finally:
     fluid.set_flags({'FLAGS_use_mkldnn': False})
 
 np.testing.assert_allclose(
-    dygraph_loss_cpu,
-    dygraph_loss_mkldnn,
+    static_loss_cpu,
+    static_loss_mkldnn,
     rtol=1e-05,
     err_msg='cpu static is {}\n mkldnn static is \n{}'.format(
-        dygraph_loss_cpu, dygraph_loss_mkldnn
+        static_loss_cpu, static_loss_mkldnn
             ),
 )
-
-
-
-# model.eval()
-# eval_dataset = CustomDataset()
-# eval_loader = paddle.io.DataLoader(eval_dataset, batch_size=32)
-# acc_set = []
-# start_time2 = time.time()
-# for batch_id, data in enumerate(eval_loader()):
-#     x_data = data[0]
-#     y_data = data[1]
-#     logits = model(x_data)
-#     pred = F.softmax(logits)
-#     acc = paddle.metric.accuracy(pred, y_data)
-#     acc_set.append(acc.numpy())
-# print('accuracy: {:.2f}%'.format(np.mean(acc_set) * 100))
-
-# end_time2 = time.time()
-# elapsed_time2 = end_time2 - start_time2
-
-# print('cost time in eval: {:.2f}'.format(elapsed_time2))

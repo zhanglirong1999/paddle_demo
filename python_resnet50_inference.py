@@ -24,15 +24,20 @@ def main():
     fake_input = np.random.randn(args.batch_size, 3, 318, 318).astype("float32")
     input_handle.reshape([args.batch_size, 3, 318, 318])
     input_handle.copy_from_cpu(fake_input)
+    
+    warm_up = 10
+    iter_num = 10
+    for i in warm_up:
+        predictor.run()
 
-    start_time = time.time()
-    # 运行predictor
-    predictor.run()
+    start_time = time.time()    
+    for i in iter_num:
+        predictor.run()
 
     end_time = time.time()
     elapsed_time = end_time - start_time
 
-    print('one epoch cast time: {:.2f}'.format(elapsed_time))
+    print('avg one epoch cast time: {:.2f}'.format(elapsed_time/iter_num))
 
     output_names = predictor.get_output_names()
     output_handle = predictor.get_output_handle(output_names[0])
