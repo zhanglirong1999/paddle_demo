@@ -9,6 +9,9 @@ fluid.set_flags({'FLAGS_use_mkldnn': True})
 conv2d = paddle.nn.Conv2D(in_channels=3, out_channels=2, kernel_size=3, stride=1, padding=1)
 conv2d = paddle.jit.to_static(conv2d)
 
+# for optimized strategy
+# conv2d = paddle.jit.to_static(conv2d, build_strategy=build_strategy)
+
 output = conv2d(data)
 print(output)
 print(output.shape) 
