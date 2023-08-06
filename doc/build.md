@@ -70,6 +70,7 @@ ldd ./examples/graph-simple-pattern-f32-cpp
 
 export LD_LIBRARY_PATH=/usr/local/lib:$LD_LIBRARY_PATH
 
+(用这个)
 export LD_PRELOAD=/home/ubuntu/intel/oneDNN/build/src/libdnnl.so.3
 
 export LD_LIBRARY_PATH=/home/ubuntu/intel/oneDNN/build/src/libdnnl.so.3
@@ -104,31 +105,7 @@ perf report
 
 2. export DNNL_VERBOSE=1 \
 ./examples/primitives-example-mlp-fuse-cpp
-```
-ubuntu@VM-12-15-ubuntu:~/intel/oneDNN/build2$ ./examples/primitives-example-mlp-cpp
-onednn_verbose,info,oneDNN v3.2.0 (commit 2a3fbc8a43e553af97a4936cb6f39e5935af5e72)
-onednn_verbose,info,cpu,runtime:OpenMP,nthr:4
-onednn_verbose,info,cpu,isa:Intel AVX2
-onednn_verbose,info,gpu,runtime:none
-onednn_verbose,info,prim_template:operation,engine,primitive,implementation,prop_kind,memory_descriptors,attributes,auxiliary,problem_desc,exec_time
-onednn_verbose,exec,cpu,matmul,gemm:jit:f32,undef,src_f32::blocked:abc::f0 wei_f32::blocked:abc::f0 bia_f32::blocked:abc::f0_mask4 dst_f32::blocked:abc::f0,,,1x12800x128:1x128x64,39.0911
-onednn_verbose,exec,cpu,eltwise,jit:avx2,forward_inference,data_f32::blocked:abc::f0 diff_undef::undef:::,,alg:eltwise_relu alpha:1.2 beta:0,1x12800x64,13.1912
-onednn_verbose,exec,cpu,matmul,gemm:jit:f32,undef,src_f32::blocked:abc::f0 wei_f32::blocked:abc::f0 bia_f32::blocked:abc::f0_mask4 dst_f32::blocked:abc::f0,,,1x12800x64:1x64x32,26.54
-onednn_verbose,exec,cpu,eltwise,jit:avx2,forward_inference,data_f32::blocked:abc::f0 diff_undef::undef:::,,alg:eltwise_relu alpha:0.7 beta:0,1x12800x32,25.1069
-Elapsed time on double mlp without post-ops: 179 ms
-Example passed on CPU.
-ubuntu@VM-12-15-ubuntu:~/intel/oneDNN/build2$ ./examples/primitives-example-mlp-fuse-cpp
-onednn_verbose,info,oneDNN v3.2.0 (commit 2a3fbc8a43e553af97a4936cb6f39e5935af5e72)
-onednn_verbose,info,cpu,runtime:OpenMP,nthr:4
-onednn_verbose,info,cpu,isa:Intel AVX2
-onednn_verbose,info,gpu,runtime:none
-onednn_verbose,info,prim_template:operation,engine,primitive,implementation,prop_kind,memory_descriptors,attributes,auxiliary,problem_desc,exec_time
-onednn_verbose,exec,cpu,matmul,gemm:jit:f32,undef,src_f32::blocked:abc::f0 wei_f32::blocked:abc::f0 bia_f32::blocked:abc::f0_mask4 dst_f32::blocked:abc::f0,attr-post-ops:eltwise_relu:1.2 ,,1x12800x128:1x128x64,18.0881
-onednn_verbose,exec,cpu,matmul,gemm:jit:f32,undef,src_f32::blocked:abc::f0 wei_f32::blocked:abc::f0 bia_f32::blocked:abc::f0_mask4 dst_f32::blocked:abc::f0,attr-post-ops:eltwise_relu:0.7 ,,1x12800x64:1x64x32,1.01807
-Elapsed time on double mlp with post-ops fuse ReLU: 43 ms
-Example passed on CPU.
 
-```
 ## stable performance配置：
 ```
 You can try it with numactl tools on linux:
@@ -153,15 +130,15 @@ docker attach paddle-test
 ```
 
 注意一定要 develop分支： \
-`cmake .. -DPY_VERSION=3.7 -DWITH_GPU=OFF -DWITH_TESTING=ON`  
-cmake .. -DPY_VERSION=3.7 -DWITH_GPU=OFF -DWITH_TESTING=ON \
-    -DWITH_MKL=ON \
-    -DWITH_MKLDNN=ON \
-    -DWITH_TESTING=ON \
-    -DCMAKE_BUILD_TYPE=Release
-编译完后所在目录：
+`cmake .. -DPY_VERSION=3.7 -DWITH_GPU=OFF -DWITH_TESTING=ON -DWITH_INFERENCE_API_TEST=ON`  
+cmake .. -DPY_VERSION=3.7 -DWITH_GPU=OFF -DWITH_INFERENCE_API_TEST=1 -DWITH_TESTING=1 -DWITH_MKL=ON -DWITH_MKLDNN=ON -DCMAKE_BUILD_TYPE=Release
+
+
+编译完后TEST analisy所在目录：
 ```
 /paddle/build/paddle/fluid/inference/tests/api
+如果是develop分支，在
+/paddle/build/test/cpp/inference/api
 ```
 记得要把model放在/model, 参数放在/params 
 
@@ -250,33 +227,12 @@ Python目录里存放的是Python接口的实现以及调用方式(paddle的上�
 
 
 ------
-开启oneDNN: 设置attribute: use_mkldnn = True, 然后会到paddle\fluid\inference\api\analysis_predictor.cc, MkldnnPreSet, 然后就调用到了phi::OneDNNContext里的东西。而这个`analysis_predictor`会在paddle\fluid\jit的PredictorEngine的engine中调用(`predictor_.reset(new AnalysisPredictor(config));`)，加入到paddle的jit和layer中。在：
-```
-     layer.SetEngine(
-          info->FunctionName(),
-          utils::MakeEngine<PredictorEngine>(info, params_dict, place));
-```
-把engine加入到layer中。 
-
-在paddle\phi\core\flags.cc中：
-```
- * FLAGS_jit_engine_type == New, using InterpreterEngine by default
- * FLAGS_jit_engine_type == Predictor, using inference Predictor by default
- */
-PHI_DEFINE_EXPORTED_string(jit_engine_type,
-                           "Predictor",
-                           "Choose default function type in JitLayer.");
-```
-默认就是启用了`PredictorEngine`  
-
-因此调用过程: jit -> layer -> setEngine ->默认PredictorEngine -> AnalysisPredictor -> 发现attr: use_mkldnn,调用MkldnnPreSet, 调用到oneDNN的context 
-
-这个：
+开启oneDNN: 设置attribute: use_mkldnn = True, 然后会到
 paddle\fluid\pybind\inference_api.cc -> AnalysisPredictor.Run() -> MkldnnPreSet -> OneDNNContext init() 
 
 其中api中可以enable mkldnn, 开启oneDnn,
-其中EnableMKLDNN的最终实现应该在paddle\fluid\inference\api\paddle_pass_builder.cc ,会开启xxxx_pass，然后运行的时候执行这些IR pass,PaddlePaddle中的IR Pass是中间表示优化器. 
-op Run: void OperatorBase::Run -> RunImpl -> BuildPhiKernelContext(relate to OneDNNContext, onednn backend) -> Build input and output -> 把Attr添加到phi_kernel_context中
+其中EnableMKLDNN的最终实现应该在paddle\fluid\inference\api\paddle_pass_builder.cc ,会开启xxxx_pass，然后运行的时候执行这些IR pass,PaddlePaddle中的IR Pass是中间表示优化器.  
+
 
 关于kernel：
 ```
@@ -308,7 +264,18 @@ https://www.paddlepaddle.org.cn/inference/master/guides/quick_start/cpp_demo.htm
 推理库安装：https://www.paddlepaddle.org.cn/inference/master/guides/install/download_lib.html#windows 
 解压后的预测库paddle_inference目录(如解压后的目录名称不同，也需重命名为paddle_inference)拷贝至Paddle-Inference-Demo/c++/lib目录下
 
+```
+cd Paddle-Inference-Demo/c++/cpu/resnet50
+bash compile.sh
+
+./build/resnet50_test --model_file resnet50/inference.pdmodel --params_file resnet50/inference.pdiparams
+
+/home/zhouziyang/lirong/Paddle-Inference-Demo/c++/cpu/resnet50/libiomp5.so
+
+export LD_LIBRARY_PATH=/home/zhouziyang/lirong/Paddle-Inference-Demo/c++/cpu/resnet50/libiomp5.so:$LD_LIBRARY_PATH
+```
 ----
+
 开启IR graph可视化
 ```
 python: config.switch_ir_debug()
@@ -316,3 +283,220 @@ c++: cfg.SwitchIrDebug()
 
 dot -Tpng xxx.dot -o xxx.png
 ```
+
+
+----------
+
+
+python /paddle/python/paddle/fluid/tests/unittests/dygraph_to_static/test.py
+python /paddle/python/paddle/fluid/tests/unittests/dygraph_to_static/test_mm.py
+
+------
+
+python api:如 paddle.nn.linear调用过程：
+_legacy_C_ops.matmul_v2
+paddle\fluid\operators\matmul_v2_op.cc
+paddle\fluid\operators\matmul_op.cc
+
+------
+
+pdb的使用:
+```
+import pdb 
+pdb.set_trace()
+
+n（next）：执行下一行代码。
+s（step）：进入当前行的函数或方法中。
+c（continue）：继续程序执行，直到下一个断点或程序结束。
+p <variable>（print）：打印变量的值。
+l（list）：显示当前行的代码以及周围的代码。
+q（quit）：退出调试模式。
+```
+-----------------
+python\paddle\_legacy_C_ops.py: \
+在非 Eager 模式下，用户需要先定义计算图（computation graph），然后再将数据输入到计算图中进行计算。计算图通常是由算子和变量组成的，算子表示数据的计算过程，变量表示数据的存储位置。计算图的优点是可以对整个计算过程进行优化，提高计算效率，但是它也带来了一定的限制，例如无法进行动态计算等。
+
+在 Eager 模式下，用户可以直接使用 Python 语言进行计算，而无需先定义计算图。每个计算操作都会立即执行，结果也会立即返回。这样可以更加灵活地进行计算，支持动态计算和调试，但是可能会带来一定的计算性能损失。
+
+在_legacy_C_ops.py中，会导入 core.ops 中的所有算子，并将它们添加到当前 Python 环境的全局命名空间中。
+```
+if not framework._in_eager_mode_:
+    for name in dir(core.ops):
+        globals()[name] = getattr(core.ops, name)
+        __all__.append(name)
+    _already_switch_to_eager_ = False
+else:
+    for name in dir(core.eager.ops.legacy):
+        globals()[name] = getattr(core.eager.ops.legacy, name)
+        __all__.append(name)
+    _already_switch_to_eager_ = True
+```
+如会把matmul加入，后面如linear就调用_legacy_C_ops.matmul即可。
+这些加入_legacy_C_ops的算子位于paddle\fluid\operators\xxx.cc的实现。实现了所有支持的算子
+
+----------
+跑test文件：
+```
+需要 docker 里build好的，在build目录下：
+ctest -R test_flags_mkldnn_ops_on_off -V
+
+如果自己写test，放在/paddle/test/mkldnn/xxx.py文件下，然后再：
+vim /paddle/test/mkldnn/test_fused_matmul_mkldnn_op.py
+
+cmake .. -DPY_VERSION=3.7 -DWITH_GPU=OFF -DWITH_INFERENCE_API_TEST=1 -DWITH_TESTING=1 -DWITH_MKL=ON -DWITH_MKLDNN=ON -DCMAKE_BUILD_TYPE=Release
+
+make -j$(nproc)
+cd /paddle/build/python/dist
+pip3.7 install -U paddlepaddle-0.0.0-cp37-cp37m-linux_x86_64.whl
+
+ctest -R test_fused_matmul_mkldnn_op -V
+
+```
+报错需要：
+```
+pip install --upgrade protobuf
+pip3 install httpx
+pip install opt-einsum
+
+```
+
+-----
+开发一个kernel的流程。
+PD_REGISTER_KERNEL注册kernel  --> REGISTER_OPERATOR注册op
+
+
+--------
+
+c++报错栈信息：
+export FLAGS_call_stack_level=2
+
+# paddle c++中加info：
+```
+#include "glog/logging.h"
+LOG_FIRST_N(INFO, 10) << "New Executor is Running.";
+```
+
+
+## 有关动态图，静态图的一些文档：
+https://www.paddlepaddle.org.cn/documentation/docs/zh/2.5rc1/dev_guides/api_contributing_guides/new_cpp_op_cn.html#span-id-paddleyaml-8-1-paddle-yaml-span 
+
+https://www.paddlepaddle.org.cn/documentation/docs/zh/dev_guides/api_contributing_guides/new_python_api_cn.html  
+
+动态图转静态图：
+https://www.paddlepaddle.org.cn/documentation/docs/zh/guides/jit/basic_usage_cn.html 
+
+算子YAML文件：
+https://github.com/PaddlePaddle/community/blob/master/pfcc/call-for-contributions/paddle_autogen_code.md
+
+
+```
+_C_ops.trace为动态图
+由于目前飞桨动态图正处在重构升级阶段，所以现有算子的代码会分别有新旧动态图两个代码分支，其中 in_dygraph_mode() 表示新动态图分支（默认），_in_legacy_dygraph()为旧动态图分支，在新增算子时无需添加旧动态图分支代码。
+因此：
+if in_dygraph_mode():是走新版动态图
+if _in_legacy_dygraph():是旧版动态图
+最后才是走静态图
+```
+paddle.nn.Linear() 是 PaddlePaddle 中用于定义动态图全连接层的接口。 
+paddle.fluid.dygraph.nn.Linear() 是 PaddlePaddle 中用于定义旧版动态图全连接层的接口。
+
+禁用最新动态图：
+```
+export FLAGS_enable_eager_mode=0
+禁用最新eager动态图模式
+采用旧版dygraph动态图模式
+```
+
+--------
+## phi和fluid kernel
+有关AllOpKernels()拿到的fluid kernel是怎么来的，以及与phi kernel register的区别：
+
+`REGISTER_OP_KERNEL(op,xxxxx)`调用了`REGISTER_OP_KERNEL_WITH_CUSTOM_TYPE`，然后调用了`OpKernelRegistrar`--> `OpKernelRegistrarFunctor`把op加进OperatorWithKernel::AllOpKernels的map里面。
+
+-----
+一般在operator文件中，不仅register operator，还PD_REGISTER_STRUCT_KERNEL(Xxx),那么这个op的kernel大概率只有paddle自己实现的一个，没有cudnn或者mkldnn的实现
+
+------
+
+# 7.20
+paddle\phi\api\yaml\generator\api_base.py中gen_kernel_code->gene_api_code，最后由paddle\phi\api\yaml\generator\api_gen.py去生成/paddle/paddle/phi/api/lib/api.cc中的API
+
+```
+我改了vim /paddle/paddle/phi/api/yaml/generator/api_base.py，VLOG(6)改LOG_FIRST_N(INFO, 3)
+```
+
+# 旧版动态图api路径：
+paddle/fluid/pybind/eager_legacy_op_function_generator.cc  -> 
+```
+  // generate op function body
+  auto op_function_str = paddle::string::Sprintf(OP_FUNCTION_TEMPLATE,xxxxxxxxxxx)
+```
+-->                  GenerateOpFunctions去创建op的代码string 
+而eager_legacy_op_function_generator.cc，生成的这些配置字符串保存至/paddle/paddle/fluid/pybind/eager_legacy_op_function.cc.tmp，其中static PyObject * eager_legacy_api_matmul_v2就是matmul_v2调用的api，最终调用了matmul_v2_dygraph_function(),这个函数生成于/paddle/paddle/fluid/eager/api/generated/fluid_generated/forwards/dygraph_forward_functions1.cc,
+在matmul_v2_dygraph_function里面，调用了/paddle/paddle/fluid/imperative/tracer.cc的Tracer::TraceOp("matmul_v2")，调用到op。这是旧版动态图调用方式
+
+# 新版动态图
+paddle\fluid\eager\auto_code_generator\generator\python_c_gen.py生成了/paddle/paddle/fluid/pybind/eager_op_function.cc.tmp --->eager_api_linear调用了matmul_ad_func (在/paddle/paddle/fluid/eager/api/generated/eager_generated/forwards/dygraph_functions.cc) ->paddle::experimental::matmul() --> api.cc里面的api
+
+
+--------
+试一下test_pool2d_mkldnn_op.py
+
+paddle动静态图区别文档：
+https://www.paddlepaddle.org.cn/tutorials/projectdetail/4047189
+
+-----
+inference调用：
+create predictor ->CreatePaddlePredictor-> AnalysisPredictor(config)里面调用了init，init又调用了PrepareScope,PrepareProgram,CreateExecutor等,此时还会调用OptimizeInferenceProgram(),最终这个函数会遍历所有pass.ApplyImpl-> NaiveExecutor.run -> op.run -> RunImpl -> InnerGetExpectedKernelType里面设置mkldnn的lib和data_layout -》 TransOpKernelTypeToPhiKernelKey设置mkldnn backend
+-----
+infernence的config把model传进去，是怎么构件图的：在AnalysisPredictor::PrepareProgram中，LoadProgramDesc()中用model_path去创建inference_program_
+----
+graph中做pass的时候，取op:做拓扑排序，构建一个有向图中的节点之间的邻接关系，构成一个邻接表，计算图节点之间的依赖关系相关的操作
+graph跑ir pass:
+```
+graph.reset(pass->Apply(graph.release()));
+```
+-----
+
+nn.linear的静态图：layerhelper 
+--》framework.py -> executor.py,链接：https://github.com/PaddlePaddle/Paddle/blob/develop/python/paddle/fluid/executor.py#L802
+
+-----
+paddle.nn.xxx静态图的ir pass构造：在executor.py中Executor()-> _ExecutorCache ->_get_program_and_executor构造了graph，把program->graph->program. 
+
+其中需要用build_strategy设置strategy，才能开启ir pass, 可以参考的例子：test_resnet.py,test_standalone_executor_fthenb_plan.py
+----
+
+-----
+## test_mnist报错pool_grad:
+测了一下pool backward传参的两个md的data_type，是一样的,是memory format不同，由oneDNN文档知：
+https://oneapi-src.github.io/oneDNN/dev_guide_inference_and_training_aspects.html
+
+第6和7
+
+改：
+```
+    auto temp_md = dnnl::memory::desc(
+        out_grad->mem_desc().get_dims(), out_grad->mem_desc().get_data_type(), OneDNNMemoryFormat::any);
+
+//    LOG_FIRST_N(INFO, 10) <<out_grad->mem_desc().get_dims();
+    this->AcquireBackwardPrimitiveDescriptor(
+        pooling_type == "max"
+            ? dnnl::algorithm::pooling_max
+            : (exclusive ? dnnl::algorithm::pooling_avg_exclude_padding
+                         : dnnl::algorithm::pooling_avg_include_padding),
+        diff_src_md,
+     //   out_grad->mem_desc(),
+        temp_md,
+        copied_strides,
+        copied_kernel_size,
+        dilation,
+        onednn_paddings[0],
+        onednn_paddings[1]);
+    LOG_FIRST_N(INFO, 10) << "kkkkkkkkkkkkk";
+  }
+```
+
+----
+
+
