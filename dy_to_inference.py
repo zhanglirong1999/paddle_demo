@@ -27,5 +27,10 @@ input_spec=[paddle.static.InputSpec(shape=[None, 512], dtype='int64')])
 #   去除：
 #         #with paddle.amp.auto_cast(False):
 #        attn_weights = F.softmax(attn_weights, axis=-1, dtype="float32").astype(query_states.dtype)
+ python predictor.py \
+    --model_name_or_path "facebook/llama-7b" \
+    --batch_size 1 \
+    --type static
 
+python predictor.py     --model_name_or_path facebook/llama-7b     --batch_size 1     --dtype "float16"     --type dygraph
 
