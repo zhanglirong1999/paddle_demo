@@ -17,7 +17,7 @@ config.rope_fusion_level = "full"
 
 model = LlamaForCausalLM._from_config(config, dtype="float32")
 print(config)
-# model = paddle.jit.to_static(model, input_spec=[paddle.static.InputSpec(shape=[None, 512], dtype='int64')])
+# model = paddle.jit.to_static(model, input_spec=[paddle.static.InputSpec(shape=[1, 8, 32, 128], dtype='int64')])
 
 paddle.jit.save(
 layer=model,
