@@ -22,7 +22,7 @@ print(config)
 paddle.jit.save(
 layer=model,
 path='example_model',
-input_spec=[paddle.static.InputSpec(shape=[None, 512], dtype='int64')])
+input_spec=[paddle.static.InputSpec(shape=[1, 8, 32, 128], dtype='int64')])
 
 #   去除：
 #         #with paddle.amp.auto_cast(False):
